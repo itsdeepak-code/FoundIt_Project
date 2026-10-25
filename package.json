@@ -1,0 +1,21 @@
+{
+  "name": "foundit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FoundIt - a college lost-and-found platform (MERN)",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "server": "npm run dev -w server",
+    "client": "npm run dev -w client",
+    "db": "node -e \"require('fs').mkdirSync('.mongo-data',{recursive:true})\" && mongod --dbpath .mongo-data --port 27017",
+    "seed": "npm run seed -w server",
+    "build": "npm run build -w client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5"
+  }
+}
