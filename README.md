@@ -4,6 +4,14 @@
 
 FoundIt is a lost-and-found web app for a college campus, built with the MERN stack (MongoDB, Express, React, Node.js) as an end-term software project.
 
+| | Link |
+|---|---|
+| **Live site** | https://YOUR-VERCEL-URL.vercel.app |
+| **Backend API** | https://foundit-project.onrender.com/api/health |
+| **Source code** | https://github.com/itsdeepak-code/foundIt_Project |
+
+> The backend runs on Render's free tier and sleeps when idle, so the first request after a while can take up to a minute.
+
 ---
 
 ## Problem statement
@@ -43,7 +51,8 @@ The backend enforces every rule in this workflow (who can do what, and when). Th
 |----------|-------|
 | Frontend | React 19, Vite 7, Tailwind CSS 4, React Router 7, Axios, Lucide React |
 | Backend  | Node.js, Express 5, Mongoose 8, jsonwebtoken, bcryptjs, cookie-parser, cors, Multer |
-| Database | MongoDB (runs locally) |
+| Database | MongoDB (local in development, MongoDB Atlas in production) |
+| Hosting  | Vercel (frontend), Render (backend), MongoDB Atlas (database) |
 | Dev tool | concurrently (starts client and server together) |
 
 ## Architecture
@@ -256,6 +265,57 @@ This starts the API on **http://localhost:5050** and the React app on **http://l
 | `npm run seed` | Resets the database and loads demo data |
 | `npm run build` | Builds the frontend for production into `client/dist` |
 
+## Deployment
+
+FoundIt is deployed on free tiers of three services:
+
+```mermaid
+flowchart LR
+    B[Browser] --> V[Vercel<br/>React build from client/]
+    V -- "/api/* and /uploads/*<br/>rewritten to Render" --> R[Render<br/>Express API from server/]
+    R --> A[(MongoDB Atlas<br/>foundit database)]
+```
+
+**How it fits together.** [`client/vercel.json`](client/vercel.json) forwards `/api/*` and `/uploads/*` from the Vercel site to the Render backend, which is the same job the Vite proxy does in development. The browser only ever talks to the Vercel domain, so:
+- the login cookie stays first-party and works in every browser, including Safari, with the same `SameSite=Lax` setting as locally;
+- the frontend needs no API URL environment variable and no code changes for production.
+
+The last rewrite rule sends every other path to `index.html`, so refreshing a page such as `/items/<id>` doesn't return a 404.
+
+### Backend on Render (Web Service)
+
+| Setting | Value |
+|---|---|
+| Root Directory | `server` |
+| Build Command | `npm install` |
+| Start Command | `npm start` |
+
+Environment variables (Render sets `PORT` itself):
+
+| Variable | Value |
+|---|---|
+| `MONGODB_URI` | Atlas connection string, ending in `/foundit` |
+| `JWT_SECRET` | a long random string, different from the local one |
+| `JWT_EXPIRES_IN` | `7d` |
+| `CLIENT_URL` | the Vercel site URL, without a trailing `/` |
+| `NODE_ENV` | `production` |
+
+Check it at `https://<render-service>.onrender.com/api/health`. The root URL `/` intentionally returns "Route not found", because the API only serves `/api/*` and `/uploads/*`.
+
+### Frontend on Vercel
+
+Import the repository, set **Root Directory** to `client` (Vite is detected automatically) and add no environment variables. If the Render URL changes, update it in `client/vercel.json` and push.
+
+### Database on MongoDB Atlas
+
+A free cluster with a database user and **Network Access** set to `0.0.0.0/0`, because Render's free tier has no fixed outgoing IP. To load the demo data into Atlas, run the seed with the Atlas URI for that one command (⚠️ it wipes the database first):
+
+```bash
+MONGODB_URI="mongodb+srv://USER:PASSWORD@YOUR-CLUSTER.mongodb.net/foundit" npm run seed
+```
+
+Secrets live only in Render's environment settings and in your local `.env`, never in the repository.
+
 ## Try the main workflow
 
 With the demo data loaded:
@@ -274,7 +334,8 @@ With the demo data loaded:
 
 ## Known limitations
 
-- **Local development only.** No deployment setup yet, and uploads are stored on the local disk.
+- **Uploaded photos are not permanent in production.** They are stored on the server's disk, and Render's free tier wipes the disk whenever the service restarts or wakes from sleep. Listings and claims are kept in Atlas; only photos are lost, and listings then show the category icon. Moving uploads to a storage service such as Cloudinary would fix this.
+- **Free-tier cold starts.** The Render backend sleeps after about 15 minutes without traffic, and the first request after that can take up to a minute.
 - **No in-app messaging or notifications.** After a claim is accepted, the two people contact each other by email. Users see updates when they open the app.
 - **No transactions.** Workflow safety relies on conditional updates and unique indexes (see above). With a MongoDB replica set this could be moved to transactions.
 - **An accepted claim cannot be undone.** If a handover falls through, the listing stays in `claim_pending`. A "cancel acceptance" action would be a natural next step.
